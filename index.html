@@ -1,0 +1,115 @@
+    els.checkoutBtn.addEventListener('click', () => {
+        if (!cart.length) {
+            alert('Cart is empty');
+            return;
+        }
+        openCheckout();
+    });
+    function openCheckout() {
+        els.billItems.innerHTML = cart.map(c => `
+            <div class="bill-line">
+                <div>${c.name} × ${c.qty}</div>
+                <div>${formatCurrency(c.price)}</div>
+                <div>${formatCurrency(c.price * c.qty)}</div>
+            </div>
+        `).join('');
+        const total = cart.reduce((s, it) => s + it.qty * it.price, 0);
+        els.billTotal.textContent = formatCurrency(total);
+        const qr = document.getElementById('paymentQr');
+        const upi = encodeURIComponent(`upi://pay?pa=crafted@upi&pn=The Crafted Threads&am=${total.toFixed(2)}&tn=Order Payment`);
+        qr.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${upi}`;
+        els.checkoutModal.classList.remove('hidden');
+    }
+    document.querySelector('[data-close-checkout]').addEventListener('click', () => {
+        els.checkoutModal.classList.add('hidden');
+    });
+    els.printBillBtn.addEventListener('click', () => {
+        // ...existing code...
+    });
+    els.confirmPaymentBtn.addEventListener('click', () => {
+        if (!cart.length)
+            return;
+        const total = cart.reduce((s, it) => s + it.qty * it.price, 0);
+        const sale = {
+            id: 'sale_' + Date.now(),
+            at: new Date().toISOString(),
+            items: cart.map(c => ({ id: c.id, name: c.name, qty: c.qty, price: c.price })),
+            total
+        };
+        StorageAPI.addSale(sale);
+        cart = [];
+        StorageAPI.clearCart();
+        renderCart();
+        els.checkoutModal.classList.add('hidden');
+        alert('Payment confirmed and sale recorded.');
+    });
+
+    // Manage modal
+    els.manageMenuBtn.addEventListener('click', () => {
+        renderCategoryPills();
+        renderManageItems();
+        els.manageModal.classList.remove('hidden');
+    });
+    document.querySelector('[data-close-manage]').addEventListener('click', () => {
+        els.manageModal.classList.add('hidden');
+    });
+    // ...existing code...
+
+    // Reports
+    els.reportBtn.addEventListener('click', () => {
+        els.reportMonth.valueAsDate = new Date();
+        els.reportSummary.innerHTML = '';
+        els.reportTable.innerHTML = '';
+        els.reportModal.classList.remove('hidden');
+    });
+    document.querySelector('[data-close-report]').addEventListener('click', () => {
+        els.reportModal.classList.add('hidden');
+    });
+    els.generateReportBtn.addEventListener('click', () => {
+        const monthStr = els.reportMonth.value;
+        if (!monthStr) {
+            alert('Please select a month');
+            return;
+        }
+        const [year, month] = monthStr.split('-');
+        const sales = StorageAPI.getSales();
+        const filtered = sales.filter(s => {
+            const saleDate = new Date(s.at);
+            return saleDate.getFullYear() === parseInt(year) && 
+                   (saleDate.getMonth() + 1) === parseInt(month);
+        });
+        const totalAmount = filtered.reduce((sum, s) => sum + s.total, 0);
+        const totalItems = filtered.reduce((sum, s) => sum + s.items.reduce((iq, i) => iq + i.qty, 0), 0);
+        els.reportSummary.innerHTML = `
+            <div class="summary-card">
+                <div class="summary-item">
+                    <span>Total Sales</span>
+                    <strong>${filtered.length}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total Items Sold</span>
+                    <strong>${totalItems}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total Revenue</span>
+                    <strong>${formatCurrency(totalAmount)}</strong>
+                </div>
+            </div>
+        `;
+        els.reportTable.innerHTML = `
+            <div class="row" style="font-weight:600;">
+                <div>Sale ID</div>
+                <div>Date</div>
+                <div>Items</div>
+                <div>Amount</div>
+            </div>
+            ${filtered.map(s => `
+                <div class="row">
+                    <div>${s.id}</div>
+                    <div>${new Date(s.at).toLocaleString()}</div>
+                    <div>${s.items.reduce((sum, i) => sum + i.qty, 0)}</div>
+                    <div>${formatCurrency(s.total)}</div>
+                </div>
+            `).join('')}
+        `;
+    });
